@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chemie Snake-Quiz | Edition St. Pölten</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        body { touch-action: none; /* Verhindert Scrollen am Handy beim Spielen */ }
+        canvas { 
+            background-color: #0f172a; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            image-rendering: pixelated;
+        }
+        .pixel-font { font-family: 'VT323', monospace; }
+        .dpad-btn { 
+            background: #1e293b; color: #94a3b8; border: 2px solid #334155; 
+            border-radius: 0.75rem; width: 60px; height: 60px; 
+            display: flex; justify-content: center; align-items: center; 
+            font-size: 1.5rem; font-weight: bold; user-select: none;
+        }
+        .dpad-btn:active { background: #3b82f6; color: white; border-color: #60a5fa; }
+    </style>
+</head>
+<body class="bg-slate-800 min-h-screen text-slate-100 font-sans flex flex-col items-center py-6 px-4">
+
+    <header class="w-full max-w-2xl bg-slate-900 p-6 rounded-3xl shadow-xl border-b-4 border-blue-600 mb-6 flex items-center gap-4">
+        <div class="bg-blue-600 p-3 rounded-2xl text-white text-3xl">🐍</div>
+        <div>
+            <h1 class="text-3xl font-black text-white uppercase tracking-wider">Snake <span class="text-blue-400">Quiz</span></h1>
+            <p class="text-slate-400 text-xs font-bold uppercase tracking-widest">Wissen & Geschicklichkeit</p>
+        </div>
+    </header>
+
+    <div id="menuScreen" class="w-full max-w-2xl bg-slate-900 p-8 rounded-3xl shadow-xl border border-slate-700">
+        <h2 class="text-2xl font-black text-blue-400 mb-6 uppercase">Spiel-Einstellungen</h2>
+        
+        <div class="space-y-6">
+            <div>
+                <label class="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Geschwindigkeit</label>
+                <div class="flex gap-2">
+                    <button onclick="setSpeed(120, this)" class="speed-btn flex-1 py-3 rounded-xl bg-blue-600 text-white font-black border-2 border-blue-400">Schüler</button>
+                    <button onclick="setSpeed(80, this)" class="speed-btn flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-black border-2 border-slate-700">Student</button>
+                    <button onclick="setSpeed(50, this)" class="speed-btn flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-black border-2 border-slate-700">Meister</button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Fragenanzahl (<span id="qCountDisplay">10</span>)</label>
+                <input type="range" id="qCountInput" min="5" max="30" value="10" step="5" oninput="document.getElementById('qCountDisplay').innerText = this.value" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+            </div>
+
+            <button onclick="startGame()" class="w-full bg-green-600 hover:bg-green-500 text-white py-5 rounded-2xl font-black text-xl uppercase tracking-widest shadow-lg mt-4 transition-colors">
+                Spiel Starten
+            </button>
+        </div>
+    </div>
+
+    <div id="gameScreen" class="hidden w-full max-w-2xl flex flex-col items-center">
+        
+        <div class="w-full flex justify-between items-center bg-slate-900 p-4 rounded-t-2xl border border-slate-700 border-b-0">
+            <div class="font-black text-blue-400 uppercase tracking-widest">Frage <span id="uiQuestionNum">1</span>/<span id="uiQuestionTotal">10</span></div>
+            <div class="font-black text-green-400 uppercase tracking-widest">Punkte: <span id="uiScore" class="pixel-font text-2xl">0</span></div>
+        </div>
+
+        <div class="w-full bg-blue-900 p-6 border-x border-slate-700 text-center min-h-[100px] flex items-center justify-center">
+            <p id="questionText" class="text-xl md:text-2xl font-bold text-white shadow-sm"></p>
+        </div>
+        
+        <div class="w-full flex justify-center gap-8 bg-slate-900 p-2 border-x border-slate-700 text-xs font-bold uppercase tracking-widest">
+            <span class="text-green-400 flex items-center gap-2"><div class="w-3 h-3 bg-green-500 rounded-sm"></div> = JA (Wahr)</span>
+            <span class="text-red-400 flex items-center gap-2"><div class="w-3 h-3 bg-red-500 rounded-sm"></div> = NEIN (Falsch)</span>
+        </div>
+
+        <canvas id="gameCanvas" width="400" height="400" class="w-full max-w-[400px] rounded-b-2xl border border-slate-700"></canvas>
+
+        <div class="mt-8 grid grid-cols-3 gap-2 md:hidden">
+            <div></div>
+            <button class="dpad-btn" ontouchstart="changeDir(0, -1); event.preventDefault();" onmousedown="changeDir(0, -1)">▲</button>
+            <div></div>
+            <button class="dpad-btn" ontouchstart="changeDir(-1, 0); event.preventDefault();" onmousedown="changeDir(-1, 0)">◀</button>
+            <button class="dpad-btn" ontouchstart="changeDir(0, 1); event.preventDefault();" onmousedown="changeDir(0, 1)">▼</button>
+            <button class="dpad-btn" ontouchstart="changeDir(1, 0); event.preventDefault();" onmousedown="changeDir(1, 0)">▶</button>
+        </div>
+    </div>
+
+    <div id="gameOverScreen" class="hidden w-full max-w-2xl bg-slate-900 p-10 rounded-3xl shadow-2xl border-t-8 border-blue-600 text-center mt-6">
+        <h2 class="text-4xl font-black text-white mb-2 uppercase" id="goTitle">Spiel Beendet</h2>
+        <p class="text-slate-400 mb-8 font-bold tracking-widest uppercase">Deine Leistung</p>
+        
+        <div class="text-7xl pixel-font text-yellow-400 mb-8" id="goScore">0</div>
+        
+        <div class="bg-slate-800 p-4 rounded-xl mb-8 text-left max-h-48 overflow-y-auto border border-slate-700 text-sm" id="goDetails">
+            </div>
+
+        <button onclick="location.reload()" class="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-500">
+            Zurück zum Menü
+        </button>
+    </div>
+
+    <script>
+        // --- FALLBACK DATABASE ---
+        // Dies wird genutzt, falls keine fragen.json gefunden wird.
+        const fallbackQuestions = [
+            { "q": "Ist Wasserstoff das leichteste chemische Element?", "a": true },
+            { "q": "Besteht Kochsalz (NaCl) aus Kohlenstoff und Chlor?", "a": false },
+            { "q": "Ist der pH-Wert einer reinen Säure kleiner als 7?", "a": true },
+            { "q": "Ist das chemische Symbol für Gold 'Ag'?", "a": false },
+            { "q": "Ist bei einer Oxidation eine Elektronenabgabe im Spiel?", "a": true },
+            { "q": "Zählt Methan (CH4) zur organischen Chemie?", "a": true },
+            { "q": "Entsteht bei einer Neutralisation immer ein Gas?", "a": false },
+            { "q": "Hat ein Mol Wasser eine Masse von ca. 18 Gramm?", "a": true }
+        ];
+
+        // --- GAME VARIABLES ---
+        let questions = [];
+        let activeQuestions = [];
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let gameSpeed = 120; // ms pro Frame
+        let gameLoop;
+        let errors = []; // Merkt sich falsch beantwortete Fragen
+
+        // Snake Logik
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+        
+        let snake = [];
+        let dx = 0;
+        let dy = 0;
+        let nextDx = 0;
+        let nextDy = 0;
+        
+        let foodJa = {x: 0, y: 0};
+        let foodNein = {x: 0, y: 0};
+
+        // --- INIT ---
+        window.onload = async () => {
+            try {
+                // Versuche JSON zu laden
+                const response = await fetch('fragen.json');
+                if(response.ok) {
+                    questions = await response.json();
+                    console.log("JSON erfolgreich geladen.");
+                } else {
+                    throw new Error("JSON nicht gefunden");
+                }
+            } catch (e) {
+                console.log("Nutze Fallback-Fragen:", e.message);
+                questions = fallbackQuestions;
+            }
+        };
+
+        // --- MENU UI ---
+        function setSpeed(ms, btn) {
+            gameSpeed = ms;
+            document.querySelectorAll('.speed-btn').forEach(b => {
+                b.className = "speed-btn flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-black border-2 border-slate-700";
+            });
+            btn.className = "speed-btn flex-1 py-3 rounded-xl bg-blue-600 text-white font-black border-2 border-blue-400";
+        }
+
+        function startGame() {
+            // Bereite Fragen vor (Mischen & Zuschneiden)
+            let qCount = parseInt(document.getElementById('qCountInput').value);
+            let shuffled = [...questions].sort(() => 0.5 - Math.random());
+            activeQuestions = shuffled.slice(0, Math.min(qCount, questions.length));
+            
+            currentQuestionIndex = 0;
+            score = 0;
+            errors = [];
+            
+            // UI Update
+            document.getElementById('menuScreen').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
+            document.getElementById('uiQuestionTotal').innerText = activeQuestions.length;
+            
+            resetSnake();
+            spawnFood();
+            updateUI();
+            
+            // Starte Loop
+            gameLoop = setInterval(updateGame, gameSpeed);
+        }
+
+        // --- SNAKE LOGIC ---
+        function resetSnake() {
+            snake = [
+                {x: 10, y: 10},
+                {x: 10, y: 11},
+                {x: 10, y: 12}
+            ];
+            dx = 0; dy = -1;
+            nextDx = 0; nextDy = -1;
+        }
+
+        function spawnFood() {
+            // Platziere "JA" (Grün)
+            foodJa = getRandomPos();
+            // Platziere "NEIN" (Rot), darf nicht auf "JA" liegen
+            do {
+                foodNein = getRandomPos();
+            } while (foodNein.x === foodJa.x && foodNein.y === foodJa.y);
+        }
+
+        function getRandomPos() {
+            let pos;
+            while(true) {
+                pos = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount)
+                };
+                // Check ob auf Schlange
+                let onSnake = snake.some(segment => segment.x === pos.x && segment.y === pos.y);
+                if(!onSnake) return pos;
+            }
+        }
+
+        function changeDir(newDx, newDy) {
+            // Verhindert 180 Grad Drehung
+            if (newDx === -dx && newDx !== 0) return;
+            if (newDy === -dy && newDy !== 0) return;
+            nextDx = newDx;
+            nextDy = newDy;
+        }
+
+        // Keyboard Listener
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') changeDir(0, -1);
+            if(e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') changeDir(0, 1);
+            if(e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') changeDir(-1, 0);
+            if(e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') changeDir(1, 0);
+        });
+
+        // --- MAIN GAME LOOP ---
+        function updateGame() {
+            dx = nextDx;
+            dy = nextDy;
+
+            // Move Head
+            let head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // Wall Collision (Wrap around / Wände durchlässig)
+            if (head.x < 0) head.x = tileCount - 1;
+            if (head.x >= tileCount) head.x = 0;
+            if (head.y < 0) head.y = tileCount - 1;
+            if (head.y >= tileCount) head.y = 0;
+
+            // Self Collision
+            for (let i = 0; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    endGame("Crash! Du hast dich selbst gebissen.");
+                    return;
+                }
+            }
+
+            snake.unshift(head);
+
+            // Check Food Collision
+            let ateJa = (head.x === foodJa.x && head.y === foodJa.y);
+            let ateNein = (head.x === foodNein.x && head.y === foodNein.y);
+
+            if (ateJa || ateNein) {
+                checkAnswer(ateJa); // Wenn ateJa true ist, hat er "JA" gewählt
+            } else {
+                snake.pop(); // Entferne Tail, wenn nichts gegessen wurde
+            }
+
+            drawGame();
+        }
+
+        function checkAnswer(choseYes) {
+            let currentQ = activeQuestions[currentQuestionIndex];
+            let isCorrect = (choseYes === currentQ.a);
+
+            if (isCorrect) {
+                score += 10;
+                // Schlange wächst (Tail wurde oben nicht gepoppt)
+            } else {
+                errors.push(currentQ);
+                score = Math.max(0, score - 5); // Punktabzug
+                snake.pop(); // Schlange wird kürzer bei Fehler
+                snake.pop(); // Noch kürzer als Bestrafung (optional)
+                if(snake.length < 2) {
+                    endGame("Deine Schlange ist verhungert!");
+                    return;
+                }
+            }
+
+            currentQuestionIndex++;
+            
+            if (currentQuestionIndex >= activeQuestions.length) {
+                endGame("Quiz abgeschlossen!");
+            } else {
+                spawnFood();
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            if(currentQuestionIndex < activeQuestions.length) {
+                document.getElementById('questionText').innerText = activeQuestions[currentQuestionIndex].q;
+                document.getElementById('uiQuestionNum').innerText = currentQuestionIndex + 1;
+                document.getElementById('uiScore').innerText = score;
+            }
+        }
+
+        // --- RENDER ---
+        function drawGame() {
+            // Hintergrund
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Raster (optional, sieht cool aus)
+            ctx.strokeStyle = '#1e293b';
+            for(let i=0; i<=tileCount; i++) {
+                ctx.beginPath(); ctx.moveTo(i*gridSize, 0); ctx.lineTo(i*gridSize, canvas.height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i*gridSize); ctx.lineTo(canvas.width, i*gridSize); ctx.stroke();
+            }
+
+            // Food JA (Grün)
+            ctx.fillStyle = '#22c55e';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#22c55e';
+            ctx.fillRect(foodJa.x * gridSize + 2, foodJa.y * gridSize + 2, gridSize - 4, gridSize - 4);
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 0;
+            ctx.font = "12px sans-serif";
+            ctx.fillText("J", foodJa.x * gridSize + 6, foodJa.y * gridSize + 14);
+
+            // Food NEIN (Rot)
+            ctx.fillStyle = '#ef4444';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ef4444';
+            ctx.fillRect(foodNein.x * gridSize + 2, foodNein.y * gridSize + 2, gridSize - 4, gridSize - 4);
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 0;
+            ctx.fillText("N", foodNein.x * gridSize + 6, foodNein.y * gridSize + 14);
+
+            // Snake
+            ctx.shadowBlur = 0;
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? '#60a5fa' : '#3b82f6'; // Kopf etwas heller
+                ctx.fillRect(segment.x * gridSize + 1, segment.y * gridSize + 1, gridSize - 2, gridSize - 2);
+            });
+        }
+
+        // --- END GAME ---
+        function endGame(msg) {
+            clearInterval(gameLoop);
+            document.getElementById('gameScreen').classList.add('hidden');
+            const goScreen = document.getElementById('gameOverScreen');
+            goScreen.classList.remove('hidden');
+            
+            document.getElementById('goTitle').innerText = msg;
+            document.getElementById('goScore').innerText = score;
+
+            let detailsHTML = "";
+            if(errors.length > 0) {
+                detailsHTML += "<p class='font-bold text-red-400 mb-2 uppercase'>Fehler-Analyse:</p><ul class='list-disc pl-5 text-slate-300 space-y-2'>";
+                errors.forEach(err => {
+                    detailsHTML += `<li>${err.q} <br><span class='text-blue-400'>Richtige Antwort: ${err.a ? "JA" : "NEIN"}</span></li>`;
+                });
+                detailsHTML += "</ul>";
+            } else {
+                detailsHTML = "<p class='text-green-400 font-bold'>Perfekt! Keine Fehler gemacht.</p>";
+            }
+            document.getElementById('goDetails').innerHTML = detailsHTML;
+        }
+
+    </script>
+</body>
+</html>
